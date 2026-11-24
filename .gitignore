@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Archivos intermedios de Quarto y LaTeX
+.quarto/
+*_files/
+*.tex
+*.log
+*.aux
+*.out
+*.toc
+*.ipynb
+
+# Editores y sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Comprimidos de entrega
+*.zip
