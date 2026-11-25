@@ -1,0 +1,8 @@
+# Dependencias del tablero (las mismas versiones con que se guardó el modelo).
+# Para publicarlo en la web basta con este archivo; no hace falta torch ni Quarto.
+numpy==2.5.2
+pandas==3.0.5
+scikit-learn==1.9.0
+xgboost==3.4.1
+joblib==1.6.0
+streamlit>=1.50
