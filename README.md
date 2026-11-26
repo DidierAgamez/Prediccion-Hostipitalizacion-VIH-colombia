@@ -20,7 +20,7 @@ tablas y figuras salen del código. El tablero (`dashboard/`) lee lo que ese ren
 | `articulo_ML_Agamez_final.pdf` | Artículo generado con la base completa |
 | `cargar_y_predecir.py` | Carga el modelo guardado y predice una notificación |
 | `dashboard/` | Tablero en Dash (ver `dashboard/LEEME.md`) |
-| `api/`, `vercel.json` | Despliegue en Vercel |
+| `index.py`, `vercel.json` | Despliegue en Vercel |
 | `requirements-articulo.txt` | Entorno completo con que se genera el artículo (incluye torch y Jupyter) |
 | `requirements.txt` | Entorno de la función de Vercel |
 | `dashboard/requirements.txt` | Entorno mínimo del tablero |
@@ -41,8 +41,8 @@ El repositorio ya trae lo necesario para desplegar el tablero como una función 
 
 | Archivo | Para qué |
 |---|---|
-| `api/index.py` | Punto de entrada: expone el servidor Flask del tablero Dash como `app` |
-| `vercel.json` | Envía todas las rutas a `api/index.py`; fija memoria, duración máxima y archivos excluidos |
+| `index.py` | Punto de entrada: expone el servidor Flask del tablero Dash como `app` (Vercel detecta el preset de Flask) |
+| `vercel.json` | Fija memoria, duración máxima y archivos excluidos de la función |
 | `requirements.txt` | Dependencias de la función (usa `xgboost-cpu` 3.4.1, el mismo xgboost sin librerías de GPU) |
 | `.python-version` | Python 3.12 |
 | `.vercelignore` | Deja fuera el artículo, el entorno local y los documentos de trabajo |
@@ -50,11 +50,13 @@ El repositorio ya trae lo necesario para desplegar el tablero como una función 
 Pasos:
 
 1. En https://vercel.com, **Add New → Project** e importar este repositorio de GitHub.
-2. Framework preset: **Other**. Root directory: la raíz del repositorio. No hace falta comando de build ni variables
+2. Framework preset: **Flask** (lo detecta solo). Root directory: la raíz del repositorio. No hace falta comando de build ni variables
    de entorno.
 3. **Deploy**. Cada push a `main` vuelve a desplegar.
 
 Con la CLI: `npm i -g vercel`, luego `vercel` (vista previa) o `vercel --prod` desde la raíz.
+
+En Vercel, Dash carga sus scripts y plotly.js desde su CDN (variable `VERCEL`); en local los sirve él mismo.
 
 La función pesa unos 300 MB sin comprimir (el límite de Vercel para Python es 500 MB). El primer acceso tras un rato
 sin visitas tarda unos segundos mientras carga el modelo. Si se vuelve a generar el artículo, hay que hacer commit

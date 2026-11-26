@@ -18,9 +18,11 @@ import datos as D
 import figuras as F
 
 GSAP = ["https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"]
+# En Vercel (que define la variable VERCEL) los scripts de Dash y plotly.js se cargan desde su CDN: así cada visita
+# no despierta la función una docena de veces y plotly.js (4.8 MB) no choca con el límite de 4.5 MB por respuesta.
 app = dash.Dash(__name__, title="VIH · SIVIGILA · Tablero", external_scripts=GSAP,
-                suppress_callback_exceptions=True, update_title=None)
-server = app.server                     # para Posit Connect o gunicorn: dashboard.app:server
+                suppress_callback_exceptions=True, update_title=None, serve_locally=not os.environ.get("VERCEL"))
+server = app.server                     # para Vercel (index.py) o gunicorn
 app.index_string = app.index_string.replace("<html>", '<html lang="es">')
 
 REPOSITORIO = "https://github.com/DidierAgamez/Prediccion-Hostipitalizacion-VIH-colombia"   # el mismo del código QR

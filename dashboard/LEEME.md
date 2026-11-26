@@ -65,10 +65,10 @@ líneas que se dibujan, tooltip en tarjeta, flechas del teclado y una tabla acce
 ## Publicarlo en la web
 
 **Vercel** (recomendado): ver la sección «Publicar en Vercel» del `README.md` de la raíz. El repositorio trae
-`api/index.py`, `vercel.json`, `requirements.txt` y `.python-version`; basta con importar el repositorio en Vercel.
+`index.py`, `vercel.json`, `requirements.txt` y `.python-version`; basta con importar el repositorio en Vercel.
 
 **Cualquier servidor con gunicorn**, desde la raíz:
 
 ```bash
-gunicorn api.index:app
+gunicorn index:app
 ```
