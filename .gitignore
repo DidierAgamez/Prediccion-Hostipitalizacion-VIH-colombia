@@ -27,3 +27,12 @@ desktop.ini
 
 # Comprimidos de entrega
 *.zip
+
+# Registro local de skills (gentle-ai)
+.atl/
+
+# Intermedios del render de Quarto
+*.quarto_ipynb
+
+# Vercel
+.vercel/
