@@ -2483,3 +2483,137 @@ La @tbl-sin-dias compara la regresión logística y `{python} nombre_def` con y 
 tabla(pd.DataFrame([[i, f4(r["con_media"]), f4(r["con_sd"]), f4(r["sin_media"]), f4(r["sin_sd"])] for i, r in sin_dias.iterrows()],
                    columns=["Modelo", "AUC con la variable", "D. E.", "AUC sin la variable", "D. E."]))
 ```
+
+```{python}
+#| label: exporta-tablero
+#| include: false
+
+# Exportación para el tablero (dashboard/): las cifras de figuras y tablas, sin formato, en resultados/tablero.json.
+# El tablero no recalcula nada; si el artículo se vuelve a generar, el tablero se actualiza al recargar.
+import json, math
+
+def _json(x):
+    if isinstance(x, dict):
+        return {str(k): _json(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_json(v) for v in x]
+    if isinstance(x, np.ndarray):
+        return [_json(v) for v in x.tolist()]
+    if isinstance(x, pd.DataFrame):
+        return [_json(r) for r in x.to_dict("records")]
+    if isinstance(x, pd.Series):
+        return {str(k): _json(v) for k, v in x.items()}
+    if isinstance(x, (np.integer,)):
+        return int(x)
+    if isinstance(x, (np.floating, float)):
+        return None if math.isnan(float(x)) or math.isinf(float(x)) else float(x)
+    if isinstance(x, (np.bool_,)):
+        return bool(x)
+    return x
+
+def _malla(xs, ys, n=160):
+    """Reduce una curva escalonada a n puntos sobre una malla regular del eje x, conservando los extremos."""
+    xs, ys = np.asarray(xs, float), np.asarray(ys, float)
+    o = np.argsort(xs, kind="stable")
+    xs, ys = xs[o], ys[o]
+    m = np.linspace(0, 1, n)
+    return {"x": m.tolist(), "y": np.interp(m, xs, ys).tolist()}
+
+def _por(col, orden=None):
+    g = d.groupby(col, observed=True)["y_hosp"].agg(["size", "mean"])
+    if orden is not None:
+        g = g.reindex([o for o in orden if o in g.index])
+    return [{"nivel": str(i), "n": int(r["size"]), "prop": float(r["mean"])} for i, r in g.iterrows()]
+
+g_edad_t = pd.cut(d["y_edad"], [0, 14, 24, 34, 44, 54, 64, 100],
+                  labels=["<15", "15-24", "25-34", "35-44", "45-54", "55-64", "65+"], include_lowest=True)
+g_dias_t = pd.cut(d["dias_sintomas"], [-1, 0, 7, 30, 90, 365, 3650],
+                  labels=["0", "1-7", "8-30", "31-90", "91-365", ">365"]).cat.add_categories("sin dato").fillna("sin dato")
+hist_edad = np.histogram(d["y_edad"], bins=np.arange(0, 101, 5))
+depto_t = (d.assign(dep=d["Departamento_residencia"].astype(str).str.strip().str.title())
+           .groupby("dep")["y_hosp"].agg(["size", "mean"]).sort_values("size", ascending=False))
+
+# Umbral del modelo definitivo: métricas para cada umbral de la malla, con las probabilidades fuera de pliegue
+filas_u = []
+for u in UMBRALES:
+    yh = (p_def >= u).astype(int)
+    vp = int(((yh == 1) & (y_tv == 1)).sum()); fp = int(((yh == 1) & (y_tv == 0)).sum())
+    fn = int(((yh == 0) & (y_tv == 1)).sum()); vn = int(((yh == 0) & (y_tv == 0)).sum())
+    filas_u.append({"u": float(u), "costo": C_FP * fp + C_FN * fn, "sens": vp / (vp + fn), "espec": vn / (vn + fp),
+                    "prec": vp / (vp + fp) if vp + fp else None, "alerta": float(yh.mean())})
+
+# Mapa del ACP con los grupos de K-means (submuestra para que el tablero sea liviano)
+i_acp = np.random.default_rng(SEMILLA).choice(len(X_ns), size=min(2000, len(X_ns)), replace=False)
+Z_acp = acp.transform(X_ns.iloc[i_acp])[:, :2]
+perfil_num = pd.DataFrame({
+    "n": t_ns.size(), "prop": t_ns.size() / n_tv, "edad_media": t_ns["edad"].mean(),
+    "dias_mediana": t_ns["dias_sintomas"].median(), "sin_fecha": t_ns["dias_sintomas"].apply(lambda s: s.isna().mean()),
+    "estrato_medio": t_ns["estrato_n"].mean(), "hombres": prop_("sexo", "M"),
+    "contributivo": prop_("regimen", "Contributivo"), "subsidiado": prop_("regimen", "Subsidiado"),
+    "no_asegurado": prop_("regimen", "No asegurado"), "migrante": t_ns["migrante"].mean(),
+    "caribe": prop_("region", "Caribe"), "silueta": sil_grupo, "hosp": t_ns["y_hosp"].mean()})
+
+TABLERO = {
+    "meta": {"generado_el": datetime.datetime.now().isoformat(timespec="seconds"), "semilla": SEMILLA,
+             "muestra_desarrollo": MUESTRA_DESARROLLO, "fuente": FUENTE, "url_fuente": URL_FUENTE,
+             "fecha_descarga": FECHA_DESCARGA, "anio_inicio": ANIO_INICIO, "anio_max": int(anio_max),
+             "n_crudo": n_crudo, "n_periodo": n_periodo, "n_util": n_util, "n_render": n_render,
+             "n_ent": n_ent, "n_val": n_val, "n_pru": n_pru, "n_tv": n_tv, "c_fp": C_FP, "c_fn": C_FN,
+             "prev_total": prev_total, "edad_media": edad_media, "edad_mediana": edad_mediana,
+             "minutos_cv": T_CV / 60, "minutos_render": T_RENDER / 60},
+    "flujo": flujo, "disfrazados": disfraz,
+    "descriptivo": {
+        "por_anio": [{"anio": int(a), "n": int(r["size"]), "prop": float(r["mean"])}
+                     for a, r in d.groupby("ANO")["y_hosp"].agg(["size", "mean"]).iterrows()],
+        "hist_edad": {"bordes": hist_edad[1], "casos": hist_edad[0]},
+        "edad": _por(g_edad_t), "regimen": _por("regimen", CATEGORIAS["regimen"]),
+        "dias": _por(g_dias_t), "region": _por("region", CATEGORIAS["region"]),
+        "sexo": _por("sexo", CATEGORIAS["sexo"]), "area": _por("area", CATEGORIAS["area"]),
+        "etnia": _por("etnia", CATEGORIAS["etnia"]),
+        "departamento": [{"nivel": i, "n": int(r["size"]), "prop": float(r["mean"])} for i, r in depto_t.iterrows()],
+        "grupos": [{"nivel": g, "n": int(d[g].sum()), "prop": float(d.loc[d[g] == 1, "y_hosp"].mean()) if d[g].sum() else None}
+                   for g in BIN],
+    },
+    "cv": {"orden": orden_cv, "etiqueta": ETQ_CORTA, "definitivo": nombre_def,
+           "resumen": resumen_cv.reset_index()[["Modelo", "hiper", "best_score", "auc_media", "auc_sd", "ap_media", "ap_sd", "optimismo"]],
+           "auc_pliegues": auc_pl.reset_index(), "auc_cv_def": auc_cv_def, "sd_cv_def": sd_cv_def,
+           "auc_temporal": auc_temporal, "caida_temporal": caida_temporal, "anio_corte": ANIO_CORTE_TEMP,
+           "n_temp_ent": n_temp_ent, "n_temp_eva": n_temp_eva,
+           "sin_dias": sin_dias.reset_index(names="modelo")},
+    "curvas": {m_: {"roc": _malla(c_["fpr"], c_["tpr"]), "pr": _malla(c_["rec"], c_["prec"]),
+                    "auc": c_["auc"], "ap": c_["ap"]} for m_, c_ in curvas.items()},
+    "prev_tv": prev_tv,
+    "umbral": {"u_def": u_def, "p_star": p_star, "costo_def": costo_def, "costo_05": costo_def_05,
+               "ahorro": ahorro_def, "malla": filas_u, "sens_costos": sens_costos,
+               "calibracion": {"pred": frac_pred_def, "obs": frac_obs_def},
+               "brier": brier_def, "brier_base": brier_base, "mejora_brier": mejora_brier},
+    "prueba": {"metricas": m_pru, "especificidad": espec_pru, "ic": {k: list(v) for k, v in ic.items()},
+               "VP": VP, "FN": FN, "FP": FP, "VN": VN, "costo_1000": costo_pru_1000, "base": base_pru,
+               "prev": prev_pru, "alerta": alerta_pru, "vpp": vpp_pru, "por_mil": por_mil, "uno_de_cada": uno_de_cada},
+    "subgrupos": sub,
+    "importancia": [{"variable": v, "etiqueta": NOMBRE_VAR.get(v, v), "media": r["media"], "sd": r["sd"]}
+                    for v, r in imp_def.iterrows()],
+    "monitoreo": {"psi": [{"variable": v, "etiqueta": NOMBRE_VAR.get(v, v), **{str(a): r[a] for a in ANIOS_PSI}}
+                          for v, r in tabla_psi.iterrows()],
+                  "anios_psi": ANIOS_PSI, "bandas": list(PSI_BANDAS),
+                  "por_anio": desempeno_anio.reset_index()},
+    "equidad": {"tabla": equidad, "proxy": proxy.reset_index(), "auc_proxy_alto": AUC_PROXY_ALTO,
+                "sin_atributo": fuera.reset_index(), "atributo_fuera": ATRIB_FUERA},
+    "no_supervisado": {"rejilla": rejilla_k.reset_index(), "k": k_ns, "nombres": NOMBRES_GRUPOS,
+                       "perfil": perfil_num.reset_index(names="grupo"),
+                       "acp": {"pc1": Z_acp[:, 0], "pc2": Z_acp[:, 1], "grupo": grupo[i_acp],
+                               "var": var_acp[:2]}},
+    "edad_regresion": {"modelos": [{"modelo": n, "mae": resumen_reg.loc[n, ("mean", "MAE")],
+                                    "recm": resumen_reg.loc[n, ("mean", "RECM")], "recm_sd": resumen_reg.loc[n, ("std", "RECM")],
+                                    "r2": resumen_reg.loc[n, ("mean", "R2")], "alpha": alpha_reg.get(n)}
+                                   for n in REG_CANDIDATOS]},
+    "serie": {"anio": anio_sem, "semana": sem_sem, "casos": casos_sem, "evaluacion": eval_sem,
+              "lstm": pron_lstm[0], "ingenuo": pron_ing_mejor, "nombre_ingenuo": mejor_ing,
+              "err_lstm": {c: {"media": err_lstm[c].mean(), "min": err_lstm[c].min(), "max": err_lstm[c].max()}
+                           for c in ["mae", "recm", "mape"]},
+              "err_ingenuos": err_ing, "dm_p": dm_p},
+}
+os.makedirs("resultados", exist_ok=True)
+with open("resultados/tablero.json", "w", encoding="utf-8") as fh:
+    json.dump(_json(TABLERO), fh, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+```
